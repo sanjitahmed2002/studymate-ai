@@ -1,98 +1,168 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from "expo-router";
+import React from "react";
+import {
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+export default function WelcomeScreen() {
+  const router = useRouter();
 
-export default function HomeScreen() {
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+    <SafeAreaView style={styles.container}>
+      <View style={styles.content}>
+        <View style={styles.logoCircle}>
+          <Text style={styles.logo}>🎓</Text>
+        </View>
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+        <Text style={styles.title}>StudyMate AI</Text>
+
+        <Text style={styles.subtitle}>
+          Your AI-powered study companion
+        </Text>
+
+        <Text style={styles.description}>
+          Ask questions, summarize PDFs, generate quizzes,
+          manage notes, and plan your studies — all in one place.
+        </Text>
+
+        <View style={styles.features}>
+          <View style={styles.featureItem}>
+            <Text style={styles.featureIcon}>🤖</Text>
+            <Text style={styles.featureText}>AI Chat</Text>
+          </View>
+
+          <View style={styles.featureItem}>
+            <Text style={styles.featureIcon}>📄</Text>
+            <Text style={styles.featureText}>PDF Summary</Text>
+          </View>
+
+          <View style={styles.featureItem}>
+            <Text style={styles.featureIcon}>📝</Text>
+            <Text style={styles.featureText}>AI Quiz</Text>
+          </View>
+        </View>
+
+        <TouchableOpacity
+          style={styles.button}
+          onPress={() => router.push("/login")}
+        >
+          <Text style={styles.buttonText}>Get Started</Text>
+          <Text style={styles.arrow}>→</Text>
+        </TouchableOpacity>
+
+        <Text style={styles.footer}>
+          Study smarter • Learn better • Achieve more
+        </Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  container: {
+    flex: 1,
+    backgroundColor: "#F7F9FC",
   },
-  stepContainer: {
-    gap: 8,
+
+  content: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+
+  logoCircle: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#E8F0FE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 22,
+  },
+
+  logo: {
+    fontSize: 48,
+  },
+
+  title: {
+    fontSize: 34,
+    fontWeight: "800",
+    color: "#172033",
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+
+  subtitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#4F6EF7",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  description: {
+    fontSize: 15,
+    lineHeight: 23,
+    color: "#687386",
+    textAlign: "center",
+    maxWidth: 340,
+    marginBottom: 28,
+  },
+
+  features: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+    marginBottom: 35,
+  },
+
+  featureItem: {
+    alignItems: "center",
+    width: "31%",
+  },
+
+  featureIcon: {
+    fontSize: 27,
+    marginBottom: 7,
+  },
+
+  featureText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#4B5565",
+    textAlign: "center",
+  },
+
+  button: {
+    width: "100%",
+    height: 58,
+    backgroundColor: "#4F6EF7",
+    borderRadius: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 20,
+  },
+
+  buttonText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "700",
+  },
+
+  arrow: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    marginLeft: 10,
+  },
+
+  footer: {
+    fontSize: 12,
+    color: "#9AA3B2",
+    textAlign: "center",
   },
 });
