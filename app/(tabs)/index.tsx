@@ -18,7 +18,7 @@ export default function WelcomeScreen() {
           <Text style={styles.logo}>🎓</Text>
         </View>
 
-        <Text style={styles.title}>StudyMate AI</Text>
+        <Text style={styles.title}>Welcome to StudyMate AI</Text>
 
         <Text style={styles.subtitle}>
           Your AI-powered study companion
