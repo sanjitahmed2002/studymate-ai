@@ -1,14 +1,18 @@
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
+
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "../firebaseConfig";
+
 import {
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 export default function LoginScreen() {
@@ -17,10 +21,22 @@ export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleLogin = () => {
-    // Firebase Authentication আমরা পরে connect করব
+  const handleLogin = async () => {
+  if (!email || !password) {
+    alert("Please enter email and password.");
+    return;
+  }
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+
+    alert("Login successful!");
+
     router.replace("/(tabs)");
-  };
+  } catch (error: any) {
+    alert("Login failed: " + error.message);
+  }
+};
 
   return (
     <SafeAreaView style={styles.container}>
