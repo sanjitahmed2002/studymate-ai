@@ -64,7 +64,7 @@ export default function HomeScreen() {
           {/* AI Chat */}
           <TouchableOpacity
             style={styles.featureCard}
-            onPress={() => {}}
+            onPress={() => router.push("/ai-chat")}
           >
             <View style={[styles.iconBox, { backgroundColor: "#E8F0FE" }]}>
               <Text style={styles.featureIcon}>🤖</Text>
