@@ -22,6 +22,7 @@ export default function AIChatScreen() {
   const router = useRouter();
 
   const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -31,10 +32,10 @@ export default function AIChatScreen() {
     },
   ]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     const trimmedMessage = message.trim();
 
-    if (!trimmedMessage) {
+    if (!trimmedMessage || isLoading) {
       return;
     }
 
@@ -44,23 +45,67 @@ export default function AIChatScreen() {
       sender: "user",
     };
 
-    setMessages((previous) => [...previous, userMessage]);
-    setMessage("");
+    setMessages((previousMessages) => [
+      ...previousMessages,
+      userMessage,
+    ]);
 
-    // Temporary AI response.
-    // Real AI API will be connected later.
-    setTimeout(() => {
+    setMessage("");
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(
+        "http://192.168.0.104:3000/chat",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: trimmedMessage,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Server error");
+      }
+
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        text: "I'm ready to help! 🤖 Real AI responses will be connected in the next step.",
+        text: data.reply,
         sender: "ai",
       };
 
-      setMessages((previous) => [...previous, aiMessage]);
-    }, 700);
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        aiMessage,
+      ]);
+    } catch (error) {
+      console.error("AI Chat Error:", error);
+
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "Sorry, I couldn't connect to the AI server. Please make sure the backend is running and try again.",
+        sender: "ai",
+      };
+
+      setMessages((previousMessages) => [
+        ...previousMessages,
+        errorMessage,
+      ]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const renderMessage = ({ item }: { item: Message }) => {
+  const renderMessage = ({
+    item,
+  }: {
+    item: Message;
+  }) => {
     const isUser = item.sender === "user";
 
     return (
@@ -79,13 +124,17 @@ export default function AIChatScreen() {
         <View
           style={[
             styles.messageBubble,
-            isUser ? styles.userBubble : styles.aiBubble,
+            isUser
+              ? styles.userBubble
+              : styles.aiBubble,
           ]}
         >
           <Text
             style={[
               styles.messageText,
-              isUser ? styles.userMessageText : styles.aiMessageText,
+              isUser
+                ? styles.userMessageText
+                : styles.aiMessageText,
             ]}
           >
             {item.text}
@@ -99,7 +148,11 @@ export default function AIChatScreen() {
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        behavior={
+          Platform.OS === "ios"
+            ? "padding"
+            : undefined
+        }
       >
         {/* Header */}
         <View style={styles.header}>
@@ -112,19 +165,26 @@ export default function AIChatScreen() {
 
           <View style={styles.headerCenter}>
             <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>🤖</Text>
+              <Text style={styles.headerAvatarText}>
+                🤖
+              </Text>
             </View>
 
             <View>
-              <Text style={styles.headerTitle}>StudyMate AI</Text>
-              <Text style={styles.onlineText}>● Online</Text>
+              <Text style={styles.headerTitle}>
+                StudyMate AI
+              </Text>
+
+              <Text style={styles.onlineText}>
+                ● Online
+              </Text>
             </View>
           </View>
 
           <View style={styles.headerSpace} />
         </View>
 
-        {/* Chat */}
+        {/* Chat Messages */}
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
@@ -132,6 +192,23 @@ export default function AIChatScreen() {
           contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
         />
+
+        {/* Loading Indicator */}
+        {isLoading && (
+          <View style={styles.loadingContainer}>
+            <View style={styles.aiAvatarSmall}>
+              <Text style={styles.aiAvatarText}>
+                🤖
+              </Text>
+            </View>
+
+            <View style={styles.loadingBubble}>
+              <Text style={styles.loadingText}>
+                StudyMate AI is thinking...
+              </Text>
+            </View>
+          </View>
+        )}
 
         {/* Input */}
         <View style={styles.inputContainer}>
@@ -143,22 +220,29 @@ export default function AIChatScreen() {
             style={styles.input}
             multiline
             maxLength={1000}
+            editable={!isLoading}
           />
 
           <TouchableOpacity
             style={[
               styles.sendButton,
-              !message.trim() && styles.sendButtonDisabled,
+              (!message.trim() || isLoading) &&
+                styles.sendButtonDisabled,
             ]}
             onPress={sendMessage}
-            disabled={!message.trim()}
+            disabled={
+              !message.trim() || isLoading
+            }
           >
-            <Text style={styles.sendIcon}>➤</Text>
+            <Text style={styles.sendIcon}>
+              ➤
+            </Text>
           </TouchableOpacity>
         </View>
 
         <Text style={styles.disclaimer}>
-          StudyMate AI can make mistakes. Check important information.
+          StudyMate AI can make mistakes. Check
+          important information.
         </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -302,6 +386,38 @@ const styles = StyleSheet.create({
 
   userMessageText: {
     color: "#FFFFFF",
+  },
+
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+
+  aiAvatarSmall: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#E8F0FE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8,
+  },
+
+  loadingBubble: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EEF1F5",
+    borderRadius: 18,
+    borderBottomLeftRadius: 5,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
+  },
+
+  loadingText: {
+    fontSize: 12,
+    color: "#687386",
   },
 
   inputContainer: {
