@@ -1,15 +1,17 @@
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
-    FlatList,
-    KeyboardAvoidingView,
-    Platform,
-    SafeAreaView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+  SafeAreaView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 
 type Message = {
@@ -20,22 +22,26 @@ type Message = {
 
 export default function AIChatScreen() {
   const router = useRouter();
+  const inputRef = useRef<TextInput>(null);
 
   const [message, setMessage] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "1",
-      text: "Hi! 👋 I'm StudyMate AI. How can I help you with your studies today?",
+      text: "Hello! 👋 I'm your AI study assistant. How can I help you today?",
       sender: "ai",
     },
   ]);
 
+  // =========================
+  // SEND MESSAGE
+  // =========================
   const sendMessage = async () => {
     const trimmedMessage = message.trim();
 
-    if (!trimmedMessage || isLoading) {
+    if (!trimmedMessage || loading) {
       return;
     }
 
@@ -45,67 +51,84 @@ export default function AIChatScreen() {
       sender: "user",
     };
 
-    setMessages((previousMessages) => [
-      ...previousMessages,
-      userMessage,
-    ]);
-
+    setMessages((prev) => [...prev, userMessage]);
     setMessage("");
-    setIsLoading(true);
+    setLoading(true);
 
     try {
-      const response = await fetch(
-        "http://192.168.0.104:3000/chat",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            message: trimmedMessage,
-          }),
-        }
-      );
+      const response = await fetch("http://10.0.2.2:3000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: trimmedMessage,
+        }),
+      });
 
-      const data = await response.json();
+      // IMPORTANT:
+      // Backend response JSON নাকি plain text
+      // সেটা আগে text হিসেবে read করছি।
+      const responseText = await response.text();
+
+      console.log("Backend Status:", response.status);
+      console.log("Backend Response:", responseText);
 
       if (!response.ok) {
-        throw new Error(data.error || "Server error");
+        throw new Error(
+          responseText || `Server error: ${response.status}`
+        );
+      }
+
+      let aiReply = responseText;
+
+      // যদি backend JSON পাঠায়:
+      // {"reply":"Hello"}
+      // তাহলে reply বের করে নেব।
+      try {
+        const parsedData = JSON.parse(responseText);
+
+        if (parsedData?.reply) {
+          aiReply = parsedData.reply;
+        } else if (parsedData?.message) {
+          aiReply = parsedData.message;
+        }
+      } catch {
+        // JSON না হলে plain text হিসেবেই ব্যবহার হবে
+        aiReply = responseText;
+      }
+
+      if (!aiReply.trim()) {
+        throw new Error("AI returned an empty response.");
       }
 
       const aiMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: data.reply,
+        id: `${Date.now()}-ai`,
+        text: aiReply.trim(),
         sender: "ai",
       };
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        aiMessage,
-      ]);
+      setMessages((prev) => [...prev, aiMessage]);
     } catch (error) {
       console.error("AI Chat Error:", error);
 
       const errorMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: "Sorry, I couldn't connect to the AI server. Please make sure the backend is running and try again.",
+        id: `${Date.now()}-error`,
+        text:
+          "Sorry, I couldn't connect to the AI server. Please make sure the backend is running on port 3000.",
         sender: "ai",
       };
 
-      setMessages((previousMessages) => [
-        ...previousMessages,
-        errorMessage,
-      ]);
+      setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const renderMessage = ({
-    item,
-  }: {
-    item: Message;
-  }) => {
+  // =========================
+  // RENDER MESSAGE
+  // =========================
+  const renderMessage = ({ item }: { item: Message }) => {
     const isUser = item.sender === "user";
 
     return (
@@ -117,18 +140,20 @@ export default function AIChatScreen() {
       >
         {!isUser && (
           <View style={styles.aiAvatar}>
-            <Text style={styles.aiAvatarText}>🤖</Text>
+            <Text style={styles.aiAvatarText}>✦</Text>
           </View>
         )}
 
         <View
           style={[
             styles.messageBubble,
-            isUser
-              ? styles.userBubble
-              : styles.aiBubble,
+            isUser ? styles.userBubble : styles.aiBubble,
           ]}
         >
+          {!isUser && (
+            <Text style={styles.aiLabel}>StudyMate AI</Text>
+          )}
+
           <Text
             style={[
               styles.messageText,
@@ -144,30 +169,34 @@ export default function AIChatScreen() {
     );
   };
 
+  // =========================
+  // MAIN UI
+  // =========================
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor="#070B14"
+      />
+
       <KeyboardAvoidingView
         style={styles.keyboardContainer}
-        behavior={
-          Platform.OS === "ios"
-            ? "padding"
-            : undefined
-        }
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Header */}
+        {/* ================= HEADER ================= */}
+
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
+            activeOpacity={0.7}
           >
             <Text style={styles.backIcon}>‹</Text>
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <View style={styles.headerAvatar}>
-              <Text style={styles.headerAvatarText}>
-                🤖
-              </Text>
+            <View style={styles.headerAiIcon}>
+              <Text style={styles.headerAiText}>✦</Text>
             </View>
 
             <View>
@@ -175,113 +204,157 @@ export default function AIChatScreen() {
                 StudyMate AI
               </Text>
 
-              <Text style={styles.onlineText}>
-                ● Online
-              </Text>
+              <View style={styles.onlineContainer}>
+                <View style={styles.onlineDot} />
+
+                <Text style={styles.onlineText}>
+                  AI Assistant
+                </Text>
+              </View>
             </View>
           </View>
 
-          <View style={styles.headerSpace} />
+          <TouchableOpacity
+            style={styles.moreButton}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.moreIcon}>•••</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Chat Messages */}
+        {/* ================= CHAT AREA ================= */}
+
         <FlatList
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
+          style={styles.chatList}
           contentContainerStyle={styles.chatContent}
           showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
         />
 
-        {/* Loading Indicator */}
-        {isLoading && (
-          <View style={styles.loadingContainer}>
-            <View style={styles.aiAvatarSmall}>
-              <Text style={styles.aiAvatarText}>
-                🤖
-              </Text>
+        {/* ================= THINKING ================= */}
+
+        {loading && (
+          <View style={styles.typingContainer}>
+            <View style={styles.typingAvatar}>
+              <Text style={styles.typingAvatarText}>✦</Text>
             </View>
 
-            <View style={styles.loadingBubble}>
-              <Text style={styles.loadingText}>
-                StudyMate AI is thinking...
+            <View style={styles.typingBubble}>
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+              <View style={styles.dot} />
+
+              <Text style={styles.thinkingText}>
+                Thinking...
               </Text>
             </View>
           </View>
         )}
 
-        {/* Input */}
-        <View style={styles.inputContainer}>
-          <TextInput
-            value={message}
-            onChangeText={setMessage}
-            placeholder="Ask me anything..."
-            placeholderTextColor="#9AA3B2"
-            style={styles.input}
-            multiline
-            maxLength={1000}
-            editable={!isLoading}
-          />
+        {/* ================= INPUT ================= */}
 
-          <TouchableOpacity
-            style={[
-              styles.sendButton,
-              (!message.trim() || isLoading) &&
-                styles.sendButtonDisabled,
-            ]}
-            onPress={sendMessage}
-            disabled={
-              !message.trim() || isLoading
-            }
-          >
-            <Text style={styles.sendIcon}>
-              ➤
-            </Text>
-          </TouchableOpacity>
+        <View style={styles.inputArea}>
+          <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={styles.plusButton}
+              activeOpacity={0.7}
+              onPress={() => inputRef.current?.focus()}
+            >
+              <Text style={styles.plusText}>+</Text>
+            </TouchableOpacity>
+
+            <TextInput
+              ref={inputRef}
+              value={message}
+              onChangeText={setMessage}
+              placeholder="Ask anything..."
+              placeholderTextColor="#737B8F"
+              multiline
+              maxLength={2000}
+              style={styles.textInput}
+              textAlignVertical="center"
+              returnKeyType="default"
+              blurOnSubmit={false}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.sendButton,
+                message.trim() && !loading
+                  ? styles.sendButtonActive
+                  : styles.sendButtonDisabled,
+              ]}
+              onPress={sendMessage}
+              disabled={!message.trim() || loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#FFFFFF"
+                />
+              ) : (
+                <Text style={styles.sendIcon}>↑</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.disclaimer}>
+            StudyMate AI can make mistakes. Check important
+            information.
+          </Text>
         </View>
-
-        <Text style={styles.disclaimer}>
-          StudyMate AI can make mistakes. Check
-          important information.
-        </Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
+// ======================================================
+// STYLES
+// ======================================================
+
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
     flex: 1,
-    backgroundColor: "#F7F9FC",
+    backgroundColor: "#070B14",
   },
 
   keyboardContainer: {
     flex: 1,
+    backgroundColor: "#070B14",
   },
 
+  // ================= HEADER =================
+
   header: {
-    height: 72,
-    backgroundColor: "#FFFFFF",
+    height: 76,
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
+    backgroundColor: "#090E1A",
     borderBottomWidth: 1,
-    borderBottomColor: "#EEF1F5",
+    borderBottomColor: "#151C2C",
   },
 
   backButton: {
     width: 42,
     height: 42,
-    borderRadius: 21,
-    backgroundColor: "#F1F4F8",
-    alignItems: "center",
+    borderRadius: 14,
+    backgroundColor: "#111827",
     justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#202A3D",
   },
 
   backIcon: {
+    color: "#DCE4F5",
     fontSize: 32,
-    color: "#172033",
-    lineHeight: 35,
+    lineHeight: 34,
     marginTop: -3,
   },
 
@@ -292,45 +365,83 @@ const styles = StyleSheet.create({
     marginLeft: 12,
   },
 
-  headerAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: "#E8F0FE",
-    alignItems: "center",
+  headerAiIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: "#172A45",
     justifyContent: "center",
-    marginRight: 10,
+    alignItems: "center",
+    marginRight: 11,
+    borderWidth: 1,
+    borderColor: "#31547D",
   },
 
-  headerAvatarText: {
-    fontSize: 21,
+  headerAiText: {
+    color: "#AFCBFF",
+    fontSize: 23,
   },
 
   headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#172033",
+    color: "#F4F7FF",
+    fontSize: 17,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+
+  onlineContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 4,
+  },
+
+  onlineDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#55D68A",
+    marginRight: 6,
   },
 
   onlineText: {
-    fontSize: 11,
-    color: "#35A853",
-    marginTop: 2,
+    color: "#7F8BA3",
+    fontSize: 12,
   },
 
-  headerSpace: {
+  moreButton: {
     width: 42,
+    height: 42,
+    borderRadius: 14,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#202A3D",
+  },
+
+  moreIcon: {
+    color: "#AEB8CC",
+    fontSize: 16,
+    letterSpacing: 2,
+    marginTop: -5,
+  },
+
+  // ================= CHAT =================
+
+  chatList: {
+    flex: 1,
+    backgroundColor: "#070B14",
   },
 
   chatContent: {
     paddingHorizontal: 16,
-    paddingTop: 20,
-    paddingBottom: 15,
+    paddingTop: 22,
+    paddingBottom: 18,
   },
 
   messageRow: {
     flexDirection: "row",
-    marginBottom: 16,
+    marginBottom: 18,
     alignItems: "flex-end",
   },
 
@@ -343,16 +454,19 @@ const styles = StyleSheet.create({
   },
 
   aiAvatar: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#E8F0FE",
-    alignItems: "center",
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: "#172A45",
     justifyContent: "center",
-    marginRight: 8,
+    alignItems: "center",
+    marginRight: 9,
+    borderWidth: 1,
+    borderColor: "#2D4D73",
   },
 
   aiAvatarText: {
+    color: "#AFCBFF",
     fontSize: 17,
   },
 
@@ -364,110 +478,174 @@ const styles = StyleSheet.create({
   },
 
   aiBubble: {
-    backgroundColor: "#FFFFFF",
-    borderBottomLeftRadius: 5,
+    backgroundColor: "#111827",
+    borderTopLeftRadius: 5,
     borderWidth: 1,
-    borderColor: "#EEF1F5",
+    borderColor: "#1D273A",
   },
 
   userBubble: {
-    backgroundColor: "#4F6EF7",
+    backgroundColor: "#315D91",
     borderBottomRightRadius: 5,
+    borderWidth: 1,
+    borderColor: "#4778B1",
+  },
+
+  aiLabel: {
+    color: "#8FAFDC",
+    fontSize: 11,
+    fontWeight: "700",
+    marginBottom: 5,
+    letterSpacing: 0.3,
   },
 
   messageText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 15,
+    lineHeight: 22,
   },
 
   aiMessageText: {
-    color: "#384152",
+    color: "#DCE4F3",
   },
 
   userMessageText: {
     color: "#FFFFFF",
   },
 
-  loadingContainer: {
+  // ================= THINKING =================
+
+  typingContainer: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
+
+  typingAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 11,
+    backgroundColor: "#172A45",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 9,
+  },
+
+  typingAvatarText: {
+    color: "#AFCBFF",
+    fontSize: 16,
+  },
+
+  typingBubble: {
+    minHeight: 42,
+    paddingHorizontal: 13,
+    borderRadius: 15,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#1D273A",
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 8,
   },
 
-  aiAvatarSmall: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "#E8F0FE",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 8,
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#91A9D1",
+    marginHorizontal: 2,
   },
 
-  loadingBubble: {
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#EEF1F5",
-    borderRadius: 18,
-    borderBottomLeftRadius: 5,
-    paddingHorizontal: 15,
-    paddingVertical: 10,
-  },
-
-  loadingText: {
+  thinkingText: {
+    color: "#7F8BA3",
     fontSize: 12,
-    color: "#687386",
+    marginLeft: 7,
+  },
+
+  // ================= INPUT =================
+
+  inputArea: {
+    backgroundColor: "#090E1A",
+    borderTopWidth: 1,
+    borderTopColor: "#151C2C",
+    paddingTop: 9,
+    paddingBottom: 7,
   },
 
   inputContainer: {
     flexDirection: "row",
     alignItems: "flex-end",
-    backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
-    paddingTop: 10,
-    paddingBottom: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#EEF1F5",
+    paddingTop: 5,
+    paddingBottom: 5,
   },
 
-  input: {
+  plusButton: {
+    width: 42,
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#202A3D",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 8,
+  },
+
+  plusText: {
+    color: "#A9B6CC",
+    fontSize: 27,
+    fontWeight: "300",
+    marginTop: -2,
+  },
+
+  textInput: {
     flex: 1,
-    minHeight: 48,
-    maxHeight: 110,
-    backgroundColor: "#F1F4F8",
-    borderRadius: 16,
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#172033",
-    marginRight: 9,
+    minHeight: 46,
+    maxHeight: 120,
+    borderRadius: 15,
+    backgroundColor: "#111827",
+    borderWidth: 1,
+    borderColor: "#202A3D",
+    color: "#F2F5FB",
+    fontSize: 15,
+    paddingHorizontal: 14,
+    paddingTop: 11,
+    paddingBottom: 11,
+    marginRight: 8,
   },
 
   sendButton: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: "#4F6EF7",
-    alignItems: "center",
+    width: 46,
+    height: 46,
+    borderRadius: 15,
     justifyContent: "center",
+    alignItems: "center",
+  },
+
+  sendButtonActive: {
+    backgroundColor: "#4778B1",
+    borderWidth: 1,
+    borderColor: "#6194D0",
   },
 
   sendButtonDisabled: {
-    opacity: 0.45,
+    backgroundColor: "#182131",
+    borderWidth: 1,
+    borderColor: "#242E40",
   },
 
   sendIcon: {
-    fontSize: 21,
     color: "#FFFFFF",
-    marginLeft: 2,
+    fontSize: 25,
+    fontWeight: "600",
+    marginTop: -2,
   },
 
   disclaimer: {
-    backgroundColor: "#FFFFFF",
     textAlign: "center",
-    fontSize: 9,
-    color: "#9AA3B2",
-    paddingBottom: 8,
+    color: "#566176",
+    fontSize: 10,
+    paddingHorizontal: 20,
+    paddingBottom: 3,
   },
 });
