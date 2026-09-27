@@ -1,6 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useState } from "react";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "../firebaseConfig";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -42,29 +44,42 @@ export default function NotesScreen() {
   useFocusEffect(
     useCallback(() => {
       initNotes();
+
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        if (currentUser) {
+          const activeUserId = currentUser.uid;
+          setUserId(activeUserId);
+          loadNotesForUser(activeUserId);
+        } else {
+          setUserId("");
+          setNotes([]);
+        }
+      });
+
+      return unsubscribe;
     }, [])
   );
 
   const initNotes = async () => {
     try {
       setLoadingNotes(true);
-      const userSession = await AsyncStorage.getItem("@user_session");
 
-      if (userSession) {
-        const userData = JSON.parse(userSession);
-        // Login thakle sei account-er ID nibe
-        const activeUserId = userData.id || userData.email || "guest_user";
+      // Use Firebase UID so every account has completely separate notes.
+      const currentUser = auth.currentUser;
+
+      if (currentUser) {
+        const activeUserId = currentUser.uid;
         setUserId(activeUserId);
         await loadNotesForUser(activeUserId);
       } else {
-        // Login na thakle 'guest_user' hisebe local-e note save korte dibe
-        setUserId("guest_user");
-        await loadNotesForUser("guest_user");
+        // No logged-in user: never show another account's notes.
+        setUserId("");
+        setNotes([]);
       }
     } catch (error) {
       console.error("User init error:", error);
-      setUserId("guest_user");
-      await loadNotesForUser("guest_user");
+      setUserId("");
+      setNotes([]);
     } finally {
       setLoadingNotes(false);
     }
