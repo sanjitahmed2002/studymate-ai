@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -21,8 +21,6 @@ type Note = {
   content: string;
 };
 
-const NOTES_STORAGE_KEY = "@studymate_notes";
-
 export default function NotesScreen() {
   const router = useRouter();
 
@@ -36,36 +34,66 @@ export default function NotesScreen() {
   const [content, setContent] = useState("");
 
   const [loadingNotes, setLoadingNotes] = useState(true);
+  const [userId, setUserId] = useState<string>("guest_user");
 
-  // =========================
-  // LOAD NOTES
-  // =========================
-  useEffect(() => {
-    loadNotes();
-  }, []);
+  // ==========================================
+  // RE-LOAD NOTES EVERY TIME SCREEN IS FOCUSED
+  // ==========================================
+  useFocusEffect(
+    useCallback(() => {
+      initNotes();
+    }, [])
+  );
 
-  const loadNotes = async () => {
+  const initNotes = async () => {
     try {
-      const savedNotes = await AsyncStorage.getItem(NOTES_STORAGE_KEY);
+      setLoadingNotes(true);
+      const userSession = await AsyncStorage.getItem("@user_session");
 
-      if (savedNotes) {
-        setNotes(JSON.parse(savedNotes));
+      if (userSession) {
+        const userData = JSON.parse(userSession);
+        // Login thakle sei account-er ID nibe
+        const activeUserId = userData.id || userData.email || "guest_user";
+        setUserId(activeUserId);
+        await loadNotesForUser(activeUserId);
+      } else {
+        // Login na thakle 'guest_user' hisebe local-e note save korte dibe
+        setUserId("guest_user");
+        await loadNotesForUser("guest_user");
       }
     } catch (error) {
-      console.error("Load notes error:", error);
-      Alert.alert("Error", "Could not load your notes.");
+      console.error("User init error:", error);
+      setUserId("guest_user");
+      await loadNotesForUser("guest_user");
     } finally {
       setLoadingNotes(false);
     }
   };
 
-  // =========================
-  // SAVE NOTES TO STORAGE
-  // =========================
-  const saveNotesToStorage = async (updatedNotes: Note[]) => {
+  const loadNotesForUser = async (currentUserId: string) => {
     try {
+      const storageKey = `@studymate_notes_${currentUserId}`;
+      const savedNotes = await AsyncStorage.getItem(storageKey);
+
+      if (savedNotes) {
+        setNotes(JSON.parse(savedNotes));
+      } else {
+        setNotes([]);
+      }
+    } catch (error) {
+      console.error("Load notes error:", error);
+      Alert.alert("Error", "Could not load your notes.");
+    }
+  };
+
+  const saveNotesToStorage = async (
+    updatedNotes: Note[],
+    currentUserId: string
+  ) => {
+    try {
+      const storageKey = `@studymate_notes_${currentUserId}`;
       await AsyncStorage.setItem(
-        NOTES_STORAGE_KEY,
+        storageKey,
         JSON.stringify(updatedNotes)
       );
     } catch (error) {
@@ -74,10 +102,8 @@ export default function NotesScreen() {
     }
   };
 
-  // =========================
-  // CREATE / UPDATE NOTE
-  // =========================
   const saveNote = async () => {
+    const activeUserId = userId || "guest_user";
     const trimmedTitle = title.trim();
     const trimmedContent = content.trim();
 
@@ -93,7 +119,6 @@ export default function NotesScreen() {
 
     let updatedNotes: Note[];
 
-    // EDIT EXISTING NOTE
     if (editingNoteId) {
       updatedNotes = notes.map((note) =>
         note.id === editingNoteId
@@ -105,7 +130,6 @@ export default function NotesScreen() {
           : note
       );
     } else {
-      // CREATE NEW NOTE
       const newNote: Note = {
         id: Date.now().toString(),
         title: trimmedTitle,
@@ -116,8 +140,7 @@ export default function NotesScreen() {
     }
 
     setNotes(updatedNotes);
-
-    await saveNotesToStorage(updatedNotes);
+    await saveNotesToStorage(updatedNotes, activeUserId);
 
     setTitle("");
     setContent("");
@@ -132,9 +155,6 @@ export default function NotesScreen() {
     );
   };
 
-  // =========================
-  // OPEN EDITOR
-  // =========================
   const editNote = (note: Note) => {
     setTitle(note.title);
     setContent(note.content);
@@ -142,9 +162,6 @@ export default function NotesScreen() {
     setShowEditor(true);
   };
 
-  // =========================
-  // DELETE NOTE
-  // =========================
   const deleteNote = (id: string) => {
     Alert.alert(
       "Delete Note",
@@ -158,21 +175,17 @@ export default function NotesScreen() {
           text: "Delete",
           style: "destructive",
           onPress: async () => {
-            const updatedNotes = notes.filter(
-              (note) => note.id !== id
-            );
+            const activeUserId = userId || "guest_user";
+            const updatedNotes = notes.filter((note) => note.id !== id);
 
             setNotes(updatedNotes);
-            await saveNotesToStorage(updatedNotes);
+            await saveNotesToStorage(updatedNotes, activeUserId);
           },
         },
       ]
     );
   };
 
-  // =========================
-  // CANCEL EDITOR
-  // =========================
   const cancelEditor = () => {
     setTitle("");
     setContent("");
@@ -180,9 +193,6 @@ export default function NotesScreen() {
     setShowEditor(false);
   };
 
-  // =========================
-  // SEARCH
-  // =========================
   const filteredNotes = notes.filter((note) => {
     const search = searchText.toLowerCase();
 
@@ -200,7 +210,6 @@ export default function NotesScreen() {
         style={styles.keyboardContainer}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* HEADER */}
         <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
@@ -235,7 +244,6 @@ export default function NotesScreen() {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
-          {/* SEARCH */}
           <View style={styles.searchContainer}>
             <Text style={styles.searchIcon}>🔍</Text>
 
@@ -257,7 +265,6 @@ export default function NotesScreen() {
             )}
           </View>
 
-          {/* EDITOR */}
           {showEditor && (
             <View style={styles.editorCard}>
               <Text style={styles.editorTitle}>
@@ -304,7 +311,6 @@ export default function NotesScreen() {
             </View>
           )}
 
-          {/* LOADING */}
           {loadingNotes ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>⏳</Text>
@@ -312,7 +318,6 @@ export default function NotesScreen() {
             </View>
           ) : (
             <>
-              {/* NO NOTES */}
               {notes.length === 0 && !showEditor && (
                 <View style={styles.emptyContainer}>
                   <View style={styles.emptyIconContainer}>
@@ -338,7 +343,6 @@ export default function NotesScreen() {
                 </View>
               )}
 
-              {/* SEARCH RESULT EMPTY */}
               {notes.length > 0 && filteredNotes.length === 0 && (
                 <View style={styles.emptyContainer}>
                   <Text style={styles.emptyIcon}>🔍</Text>
@@ -349,7 +353,6 @@ export default function NotesScreen() {
                 </View>
               )}
 
-              {/* NOTES LIST */}
               {filteredNotes.length > 0 && (
                 <View>
                   <View style={styles.notesHeader}>
@@ -377,7 +380,6 @@ export default function NotesScreen() {
                       </View>
 
                       <View style={styles.actionButtons}>
-                        {/* EDIT */}
                         <TouchableOpacity
                           style={styles.editButton}
                           onPress={() => editNote(note)}
@@ -386,7 +388,6 @@ export default function NotesScreen() {
                           <Text style={styles.actionIcon}>✏️</Text>
                         </TouchableOpacity>
 
-                        {/* DELETE */}
                         <TouchableOpacity
                           style={styles.deleteButton}
                           onPress={() => deleteNote(note.id)}
@@ -402,7 +403,6 @@ export default function NotesScreen() {
             </>
           )}
 
-          {/* INFO CARD */}
           <View style={styles.infoCard}>
             <Text style={styles.infoEmoji}>💡</Text>
 
@@ -422,14 +422,11 @@ export default function NotesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0F172A", // Deep Slate Dark Mode
+    backgroundColor: "#0F172A",
   },
-
   keyboardContainer: {
     flex: 1,
   },
-
-  // HEADER
   header: {
     height: 72,
     backgroundColor: "#1E293B",
@@ -439,7 +436,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#334155",
   },
-
   backButton: {
     width: 42,
     height: 42,
@@ -448,31 +444,26 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   backIcon: {
     fontSize: 28,
     color: "#F8FAFC",
     marginTop: -3,
   },
-
   headerTextContainer: {
     flex: 1,
     marginLeft: 14,
   },
-
   headerTitle: {
     fontSize: 19,
     fontWeight: "800",
     color: "#F8FAFC",
     letterSpacing: 0.3,
   },
-
   headerSubtitle: {
     fontSize: 12,
     color: "#94A3B8",
     marginTop: 2,
   },
-
   addButton: {
     width: 44,
     height: 44,
@@ -486,21 +477,17 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-
   addIcon: {
     fontSize: 26,
     color: "#FFFFFF",
     fontWeight: "600",
     marginTop: -2,
   },
-
   content: {
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 40,
   },
-
-  // SEARCH
   searchContainer: {
     height: 52,
     backgroundColor: "#1E293B",
@@ -512,25 +499,20 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   searchIcon: {
     fontSize: 16,
     marginRight: 10,
   },
-
   searchInput: {
     flex: 1,
     fontSize: 14,
     color: "#F8FAFC",
   },
-
   clearSearch: {
     fontSize: 16,
     color: "#94A3B8",
     paddingLeft: 8,
   },
-
-  // EDITOR
   editorCard: {
     backgroundColor: "#1E293B",
     borderRadius: 20,
@@ -539,14 +521,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   editorTitle: {
     fontSize: 18,
     fontWeight: "800",
     color: "#F8FAFC",
     marginBottom: 16,
   },
-
   titleInput: {
     height: 50,
     backgroundColor: "#0F172A",
@@ -558,7 +538,6 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     marginBottom: 12,
   },
-
   contentInput: {
     height: 140,
     backgroundColor: "#0F172A",
@@ -571,13 +550,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   editorButtons: {
     flexDirection: "row",
     marginTop: 16,
     gap: 12,
   },
-
   cancelButton: {
     flex: 1,
     height: 48,
@@ -586,13 +563,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   cancelText: {
     color: "#CBD5E1",
     fontSize: 14,
     fontWeight: "700",
   },
-
   saveButton: {
     flex: 1,
     height: 48,
@@ -606,14 +581,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 4,
   },
-
   saveText: {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
   },
-
-  // EMPTY CONTAINER
   emptyContainer: {
     backgroundColor: "#1E293B",
     borderRadius: 22,
@@ -623,7 +595,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   emptyIconContainer: {
     width: 72,
     height: 72,
@@ -633,18 +604,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginBottom: 16,
   },
-
   emptyIcon: {
     fontSize: 36,
   },
-
   emptyTitle: {
     fontSize: 20,
     fontWeight: "800",
     color: "#F8FAFC",
     marginTop: 4,
   },
-
   emptyDescription: {
     fontSize: 13,
     lineHeight: 20,
@@ -653,7 +621,6 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 20,
   },
-
   createButton: {
     backgroundColor: "#8B5CF6",
     paddingHorizontal: 22,
@@ -662,27 +629,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   createButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "800",
   },
-
-  // NOTES LIST
   notesHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 14,
   },
-
   sectionTitle: {
     fontSize: 19,
     fontWeight: "800",
     color: "#F8FAFC",
   },
-
   noteCount: {
     fontSize: 12,
     fontWeight: "600",
@@ -692,7 +654,6 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-
   noteCard: {
     backgroundColor: "#1E293B",
     borderRadius: 18,
@@ -703,7 +664,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   noteIconContainer: {
     width: 46,
     height: 46,
@@ -713,33 +673,27 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 14,
   },
-
   noteIcon: {
     fontSize: 22,
   },
-
   noteContent: {
     flex: 1,
   },
-
   noteTitle: {
     fontSize: 15,
     fontWeight: "800",
     color: "#F8FAFC",
     marginBottom: 4,
   },
-
   noteText: {
     fontSize: 13,
     lineHeight: 19,
     color: "#94A3B8",
   },
-
   actionButtons: {
     marginLeft: 10,
     gap: 8,
   },
-
   editButton: {
     width: 36,
     height: 36,
@@ -748,7 +702,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   deleteButton: {
     width: 36,
     height: 36,
@@ -757,12 +710,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-
   actionIcon: {
     fontSize: 15,
   },
-
-  // INFO CARD
   infoCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -773,23 +723,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#334155",
   },
-
   infoEmoji: {
     fontSize: 26,
   },
-
   infoContent: {
     flex: 1,
     marginLeft: 14,
   },
-
   infoTitle: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#F59E0B", // Accent Amber
+    color: "#F59E0B",
     marginBottom: 3,
   },
-
   infoText: {
     fontSize: 12,
     lineHeight: 18,
